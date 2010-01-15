@@ -392,9 +392,13 @@ class Tyrant(asyncore.dispatcher):
 
 
     def _do(self, steps, callback=None):
-        self._q.append((steps, callback))
+        if type(steps) is not list:
+            steps = [steps]
+        self._q.extend(list)
         if len(self._q) == 1:
             self._advance()
+        if callback is not None:
+            self._q.append((self._call_callback, callback))
 
 
     def _advance(self):
@@ -421,12 +425,15 @@ class Tyrant(asyncore.dispatcher):
     def _set_result(self, result):
         self._result = result
 
+
     def _process_result(self, callback):
-        self._do_now(lambda: self._set_result(callback(self._read_buffer))
+        self._do_now(lambda: self._set_result(callback(self._read_buffer)))
+
 
     def _success(self):
         self._read(1)
         self._process_result(lambda result: not ord(result))
+
 
     def put(self, key, value):
         """Unconditionally set key to value
@@ -475,9 +482,8 @@ class Tyrant(asyncore.dispatcher):
         # return sockstr(self.sock)
         self._push([
             (self._write, _t1(C.get, key)),
-            self._success,
-            self._return
-        ])
+            self._success
+        ], callback)
 
     def _mget(self, klst):
         socksend(self.sock, _tN(C.mget, klst))
