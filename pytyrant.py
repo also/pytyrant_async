@@ -349,6 +349,8 @@ class Tyrant(asyncore.dispatcher):
         self._write_buffer = ''
         self._read_length = 0
         self._read_buffer = ''
+        self._working = False
+        self._use_result_as_args = False
 
 
     def writable(self):
@@ -387,7 +389,7 @@ class Tyrant(asyncore.dispatcher):
     def _do_now(self, steps):
         if not type(steps) is list:
             steps = [steps]
-        self._q = steps.extend(self._q)
+        self._q. = steps.extend(self._q)
         # TODO advance?
 
 
@@ -395,20 +397,32 @@ class Tyrant(asyncore.dispatcher):
         if type(steps) is not list:
             steps = [steps]
         self._q.extend(list)
-        if len(self._q) == 1:
-            self._advance()
         if callback is not None:
             self._q.append((self._call_callback, callback))
+        if not self._working:
+            self._advance()
 
 
     def _advance(self):
-        action = self._q.pop()
+        self._working = True
+        if len(self._q) > 0:
+            action = self._q.pop()
+        else:
+            raise Exception('cannot advance')
+
         if type(action) is tuple:
             fn, args = action
         else:
             fn = action
             args = []
+        if self._use_result_as_args:
+            args.append(self._result)
+            self._use_result = False
         fn(*args)
+
+
+    def _call_callback(self, callback):
+        callback(self._result)
 
 
     def _read(self, length):
@@ -422,57 +436,30 @@ class Tyrant(asyncore.dispatcher):
         self._write_buffer = ''.join(lst)
 
 
+    def _use_result(self):
+        self._use_result_as_args = True
+
+
+    def _str(self):
+        self._do_now(
+            self._len,  # length -> _result
+            self._use_result,
+            self.read,
+            self._use_read_buffer_as_result
+        )
+
+
     def _set_result(self, result):
         self._result = result
 
 
-    def _process_result(self, callback):
+    def _process_read_buffer(self, callback):
         self._do_now(lambda: self._set_result(callback(self._read_buffer)))
 
 
     def _success(self):
         self._read(1)
-        self._process_result(lambda result: not ord(result))
-
-
-    def put(self, key, value):
-        """Unconditionally set key to value
-        """
-        socksend(self.sock, _t2(C.put, key, value))
-        socksuccess(self.sock)
-
-    def putkeep(self, key, value):
-        """Set key to value if key does not already exist
-        """
-        socksend(self.sock, _t2(C.putkeep, key, value))
-        socksuccess(self.sock)
-
-    def putcat(self, key, value):
-        """Append value to the existing value for key, or set key to
-        value if it does not already exist
-        """
-        socksend(self.sock, _t2(C.putcat, key, value))
-        socksuccess(self.sock)
-
-    def putshl(self, key, value, width):
-        """Equivalent to::
-
-            self.putcat(key, value)
-            self.put(key, self.get(key)[-width:])
-        """
-        socksend(self.sock, _t2W(C.putshl, key, value, width))
-        socksuccess(self.sock)
-
-    def putnr(self, key, value):
-        """Set key to value without waiting for a server response
-        """
-        socksend(self.sock, _t2(C.putnr, key, value))
-
-    def out(self, key):
-        """Remove key from server
-        """
-        socksend(self.sock, _t1(C.out, key))
-        socksuccess(self.sock)
+        self._process_read_buffer(lambda result: not ord(result))
 
     def get(self, key, callback):
         """Get the value of a key from the server
@@ -480,157 +467,8 @@ class Tyrant(asyncore.dispatcher):
         # socksend(self.sock, _t1(C.get, key))
         # socksuccess(self.sock)
         # return sockstr(self.sock)
-        self._push([
+        self._do([
             (self._write, _t1(C.get, key)),
-            self._success
+            self._success,
+            self._str
         ], callback)
-
-    def _mget(self, klst):
-        socksend(self.sock, _tN(C.mget, klst))
-        socksuccess(self.sock)
-        numrecs = socklen(self.sock)
-        for i in xrange(numrecs):
-            k, v = sockstrpair(self.sock)
-            yield k, v
-
-    def mget(self, klst):
-        """Get key,value pairs from the server for the given list of keys
-        """
-        return list(self._mget(klst))
-
-    def vsiz(self, key):
-        """Get the size of a value for key
-        """
-        socksend(self.sock, _t1(C.vsiz, key))
-        socksuccess(self.sock)
-        return socklen(self.sock)
-
-    def iterinit(self):
-        """Begin iteration over all keys of the database
-        """
-        socksend(self.sock, _t0(C.iterinit))
-        socksuccess(self.sock)
-
-    def iternext(self):
-        """Get the next key after iterinit
-        """
-        socksend(self.sock, _t0(C.iternext))
-        socksuccess(self.sock)
-        return sockstr(self.sock)
-
-    def _fwmkeys(self, prefix, maxkeys):
-        socksend(self.sock, _t1M(C.fwmkeys, prefix, maxkeys))
-        socksuccess(self.sock)
-        numkeys = socklen(self.sock)
-        for i in xrange(numkeys):
-            yield sockstr(self.sock)
-
-    def fwmkeys(self, prefix, maxkeys):
-        """Get up to the first maxkeys starting with prefix
-        """
-        return list(self._fwmkeys(prefix, maxkeys))
-
-    def addint(self, key, num):
-        socksend(self.sock, _t1M(C.addint, key, num))
-        socksuccess(self.sock)
-        return socklen(self.sock)
-
-    def adddouble(self, key, num):
-        fracpart, intpart = math.modf(num)
-        fracpart, intpart = int(fracpart * 1e12), int(intpart)
-        socksend(self.sock, _tDouble(C.adddouble, key, fracpart, intpart))
-        socksuccess(self.sock)
-        return sockdouble(self.sock)
-
-    def ext(self, func, opts, key, value):
-        # tcrdbext opts are RDBXOLCKREC, RDBXOLCKGLB
-        """Call func(key, value) with opts
-
-        opts is a bitflag that can be RDBXOLCKREC for record locking
-        and/or RDBXOLCKGLB for global locking"""
-        socksend(self.sock, _t3F(C.ext, func, opts, key, value))
-        socksuccess(self.sock)
-        return sockstr(self.sock)
-
-    def sync(self):
-        """Synchronize the database
-        """
-        socksend(self.sock, _t0(C.sync))
-        socksuccess(self.sock)
-
-    def vanish(self):
-        """Remove all records
-        """
-        socksend(self.sock, _t0(C.vanish))
-        socksuccess(self.sock)
-
-    def copy(self, path):
-        """Hot-copy the database to path
-        """
-        socksend(self.sock, _t1(C.copy, path))
-        socksuccess(self.sock)
-
-    def restore(self, path, msec):
-        """Restore the database from path at timestamp (in msec)
-        """
-        socksend(self.sock, _t1R(C.copy, path, msec))
-        socksuccess(self.sock)
-
-    def setmst(self, host, port):
-        """Set master to host:port
-        """
-        socksend(self.sock, _t1M(C.setmst, host, port))
-        socksuccess(self.sock)
-
-    def rnum(self):
-        """Get the number of records in the database
-        """
-        socksend(self.sock, _t0(C.rnum))
-        socksuccess(self.sock)
-        return socklong(self.sock)
-
-    def size(self):
-        """Get the size of the database
-        """
-        socksend(self.sock, _t0(C.size))
-        socksuccess(self.sock)
-        return socklong(self.sock)
-
-    def stat(self):
-        """Get some statistics about the database
-        """
-        socksend(self.sock, _t0(C.stat))
-        socksuccess(self.sock)
-        return sockstr(self.sock)
-
-    def _misc(self, func, opts, args):
-        # tcrdbmisc opts are RDBMONOULOG
-        socksend(self.sock, _t1FN(C.misc, func, opts, args))
-        try:
-            socksuccess(self.sock)
-        finally:
-            numrecs = socklen(self.sock)
-        for i in xrange(numrecs):
-            yield sockstr(self.sock)
-
-    def misc(self, func, opts, args):
-        """All databases support "putlist", "outlist", and "getlist".
-        "putlist" is to store records. It receives keys and values one after the other, and returns an empty list.
-        "outlist" is to remove records. It receives keys, and returns an empty list.
-        "getlist" is to retrieve records. It receives keys, and returns values.
-
-        Table database supports "setindex", "search", "genuid".
-
-        opts is a bitflag that can be RDBMONOULOG to prevent writing to the update log
-        """
-        return list(self._misc(func, opts, args))
-
-
-def main():
-    import doctest
-    doctest.testmod()
-
-
-if __name__ == '__main__':
-    main()
-    
