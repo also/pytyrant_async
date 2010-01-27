@@ -195,234 +195,126 @@ def sockstrpair(sock):
     return k, v
 
 
-class PyTyrant(object, UserDict.DictMixin):
-    """
-    Dict-like proxy for a Tyrant instance
-    """
-    @classmethod
-    def open(cls, *args, **kw):
-        return cls(Tyrant.open(*args, **kw))
-
-    def __init__(self, t):
-        self.t = t
-
-    def __repr__(self):
-        # The __repr__ for UserDict.DictMixin isn't desirable
-        # for a large KV store :)
-        return object.__repr__(self)
-
-    def has_key(self, key):
-        return key in self
-
-    def __contains__(self, key):
-        try:
-            self.t.vsiz(key)
-        except TyrantError:
-            return False
-        else:
-            return True
-
-    def setdefault(self, key, value):
-        try:
-            self.t.putkeep(key, value)
-        except TyrantError:
-            return self[key]
-        return value
-
-    def __setitem__(self, key, value):
-        self.t.put(key, value)
-
-    def __getitem__(self, key):
-        try:
-            return self.t.get(key)
-        except TyrantError:
-            raise KeyError(key)
-
-    def __delitem__(self, key):
-        try:
-            self.t.out(key)
-        except TyrantError:
-            raise KeyError(key)
-
-    def __iter__(self):
-        return self.iterkeys()
-
-    def iterkeys(self):
-        self.t.iterinit()
-        try:
-            while True:
-                yield self.t.iternext()
-        except TyrantError:
-            pass
-
-    def keys(self):
-        return list(self.iterkeys())
-
-    def __len__(self):
-        return self.t.rnum()
-
-    def clear(self):
-        self.t.vanish()
-
-    def update(self, other=None, **kwargs):
-        # Make progressively weaker assumptions about "other"
-        if other is None:
-            pass
-        elif hasattr(other, 'iteritems'):
-            self.multi_set(other.iteritems())
-        elif hasattr(other, 'keys'):
-            self.multi_set([(k, other[k]) for k in other.keys()])
-        else:
-            self.multi_set(other)
-        if kwargs:
-            self.update(kwargs)
-
-    def multi_del(self, keys, no_update_log=False):
-        opts = (no_update_log and RDBMONOULOG or 0)
-        if not isinstance(keys, (list, tuple)):
-            keys = list(keys)
-        self.t.misc("outlist", opts, keys)
-
-    def multi_get(self, keys, no_update_log=False):
-        opts = (no_update_log and RDBMONOULOG or 0)
-        if not isinstance(keys, (list, tuple)):
-            keys = list(keys)
-        rval = self.t.misc("getlist", opts, keys)
-        if len(rval) <= len(keys):
-            # 1.1.10 protocol, may return invalid results
-            if len(rval) < len(keys):
-                raise KeyError("Missing a result, unusable response in 1.1.10")
-            return rval
-        # 1.1.11 protocol returns interleaved key, value list
-        d = dict((rval[i], rval[i + 1]) for i in xrange(0, len(rval), 2))
-        return map(d.get, keys)
-
-    def multi_set(self, items, no_update_log=False):
-        opts = (no_update_log and RDBMONOULOG or 0)
-        lst = []
-        for k, v in items:
-            lst.extend((k, v))
-        self.t.misc("putlist", opts, lst)
-
-    def call_func(self, func, key, value, record_locking=False, global_locking=False):
-        opts = (
-            (record_locking and RDBXOLCKREC or 0) |
-            (global_locking and RDBXOLCKGLB or 0))
-        return self.t.ext(func, opts, key, value)
-
-    def get_size(self, key):
-        try:
-            return self.t.vsiz(key)
-        except TyrantError:
-            raise KeyError(key)
-
-    def get_stats(self):
-        return dict(l.split('\t', 1) for l in self.t.stat().splitlines() if l)
-
-    def prefix_keys(self, prefix, maxkeys=None):
-        if maxkeys is None:
-            maxkeys = len(self)
-        return self.t.fwmkeys(prefix, maxkeys)
-
-    def concat(self, key, value, width=None):
-        if width is None:
-            self.t.putcat(key, value)
-        else:
-            self.t.putshl(key, value, width)
-
-    def sync(self):
-        self.t.sync()
-
-    def close(self):
-        self.t.close()
-
-
 class Tyrant(asyncore.dispatcher):
     def __init__(self, host='127.0.0.1', port=DEFAULT_PORT):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect((host, port))
-        self.socket.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
+        #self.socket.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
         self._q = []
         self._reading = False
         self._writing = False
         self._write_buffer = ''
         self._read_length = 0
         self._read_buffer = ''
-        self._working = False
         self._use_result_as_args = False
+        self._call_complete = False
+
+
+    def handle_connect(self):
+        pass
+
+
+    def handle_close(self):
+        self.close()
+
+
+    def handle_error(self):
+        import traceback
+        traceback.print_exc()
+        self.close()
 
 
     def writable(self):
         if self._writing:
-            if len(self._write_buffer) > 0:
-                return True
-            else:
-                self._writing = False
-                self._advance()
-                return False
+            return True
         else:
             return False
 
 
     def readable(self):
         if self._reading:
-            if len(self._read_buffer) < self._read_length:
-                return True
-            else:
-                self._reading = False
-                self._advance()
-                return False
+            return True
         else:
             return False
 
 
     def handle_read(self):
         self._read_buffer += self.recv(self._read_length - len(self._read_buffer))
+        if len(self._read_buffer) == self._read_length:
+            # finished reading
+            self._reading = False
+            self._work()
 
 
     def handle_write(self):
         sent = self.send(self._write_buffer)
-        self.buffer = self._write_buffer[sent:]
+        self._write_buffer = self._write_buffer[sent:]
+        if len(self._write_buffer) == 0:
+            # finished writing
+            self._writing = False
+            self._work()
 
 
-    def _do_now(self, steps):
-        if not type(steps) is list:
-            steps = [steps]
-        self._q. = steps.extend(self._q)
-        # TODO advance?
+    def _is_waiting(self):
+        return self._reading or self._writing
+
+
+    def _do_now(self, *steps):
+        self._q = list(steps) + self._q
+        self._work()
 
 
     def _do(self, steps, callback=None):
         if type(steps) is not list:
             steps = [steps]
-        self._q.extend(list)
-        if callback is not None:
-            self._q.append((self._call_callback, callback))
-        if not self._working:
+        self._q.extend(steps)
+        self._callback = callback
+        self._call_complete = False
+        self._work()
+
+
+    def _work(self):
+        while not (self._call_complete or self._is_waiting()):
             self._advance()
 
 
     def _advance(self):
+        '''
+        Executes the next function in the queue, or calls the callback with the result.
+        '''
         self._working = True
-        if len(self._q) > 0:
-            action = self._q.pop()
+        
+        if len(self._q) == 0:
+            self._complete(self._result)
+            return
         else:
-            raise Exception('cannot advance')
+            action = self._q.pop(0)
 
         if type(action) is tuple:
-            fn, args = action
+            try:
+                fn, args = action
+            except:
+                print repr(action)
+                raise
         else:
             fn = action
             args = []
         if self._use_result_as_args:
             args.append(self._result)
-            self._use_result = False
+            self._use_result_as_args = False
         fn(*args)
 
 
-    def _call_callback(self, callback):
-        callback(self._result)
+    def _fail(self):
+        # TODO
+        self._complete(None)
+
+
+    def _complete(self, callback_value):
+        self._call_complete = True
+        self._q = []
+        self._callback(callback_value)
 
 
     def _read(self, length):
@@ -440,12 +332,28 @@ class Tyrant(asyncore.dispatcher):
         self._use_result_as_args = True
 
 
+    def _use_read_buffer_as_result(self):
+        self._set_result(self._read_buffer)
+
+
     def _str(self):
+        '''
+        Reads a string from the server and stores it in the result.
+        '''
         self._do_now(
             self._len,  # length -> _result
             self._use_result,
-            self.read,
+            self._read,
             self._use_read_buffer_as_result
+        )
+
+    def _len(self):
+        '''
+        Reads a length from the server and stores it in the result.
+        '''
+        self._do_now(
+            (self._read, [4]),
+            self._process_read_buffer(lambda result: struct.unpack('>I', result)[0])
         )
 
 
@@ -454,21 +362,43 @@ class Tyrant(asyncore.dispatcher):
 
 
     def _process_read_buffer(self, callback):
-        self._do_now(lambda: self._set_result(callback(self._read_buffer)))
+        return lambda: self._set_result(callback(self._read_buffer))
 
 
     def _success(self):
-        self._read(1)
-        self._process_read_buffer(lambda result: not ord(result))
+        '''
+        Reads the response from the server.
+        
+        On success, sets result to True. On failure, calls the failure callback.
+        '''
+        def _check_result():
+            if ord(self._read_buffer):
+                self._fail()
+            else:
+                self._set_result(True)
+        self._do_now(
+            (self._read, [1]),
+            _check_result
+        )
+
 
     def get(self, key, callback):
         """Get the value of a key from the server
         """
-        # socksend(self.sock, _t1(C.get, key))
-        # socksuccess(self.sock)
-        # return sockstr(self.sock)
         self._do([
-            (self._write, _t1(C.get, key)),
+            (self._write, [_t1(C.get, key)]),
             self._success,
             self._str
         ], callback)
+
+
+    def put(self, key, value, callback):
+        self._do([
+            (self._write, [_t2(C.put, key, value)]),
+            self._success
+        ], callback)
+
+
+def callback(*args):
+    print '------- callback --------'
+    print repr(args)
