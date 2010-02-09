@@ -64,5 +64,3 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
             # finished writing
             self._writing = False
             self.protocol._write_callback()
-
-start = asyncore.loop

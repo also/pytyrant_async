@@ -21,7 +21,3 @@ class TornadoAdaptor(object):
     
     def write(self, data):
         self.stream.write(data, self.protocol._write_callback)
-
-
-from tornado import ioloop
-start = ioloop.IOLoop.instance().start

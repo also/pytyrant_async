@@ -73,8 +73,3 @@ class TwistedProtocol(async.ReadBufferingAdaptor, protocol.Protocol):
         self.transport.write(data)
         # TODO
         self.protocol._write_callback()
-
-
-from twisted.internet import reactor
-def start():
-    reactor.run()
