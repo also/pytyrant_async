@@ -2,7 +2,7 @@ import socket
 
 from tornado import iostream
 
-class IOStreamAdaptor(object):
+class TornadoAdaptor(object):
     def __init__(self, protocol, host, port):
         self.protocol = protocol
         protocol.adaptor = self
