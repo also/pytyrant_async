@@ -5,7 +5,7 @@ import async
 __version__ = '1.1.17'
 
 __all__ = [
-    'TyrantError', 'PyTyrant',
+    'TyrantError', 'Tyrant',
     'RDBMONOULOG', 'RDBXOLCKREC', 'RDBXOLCKGLB',
 ]
 
