@@ -28,17 +28,11 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
 
 
     def writable(self):
-        if self._writing:
-            return True
-        else:
-            return False
+        return self._writing
 
 
     def readable(self):
-        if self._reading:
-            return True
-        else:
-            return False
+        return self._reading
 
 
     def handle_read(self):
