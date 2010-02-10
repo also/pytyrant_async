@@ -9,19 +9,6 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
         asyncore.dispatcher.__init__(self)
         self.protocol = protocol
         protocol.adaptor = self
-        methods = [
-            'handle_connect',
-            'handleread',
-            'handle_write',
-            'handle_close',
-            'handle_error',
-            'readable',
-            'writable'
-        ]
-
-        for method in methods:
-            if hasattr(protocol, method):
-                setattr(self, method, getattr(protocol, method))
 
         self._init_read_buffering()
         self._writing = False
