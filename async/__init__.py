@@ -10,11 +10,11 @@ class StreamProtocol(object):
         return self.adaptor.close()
 
 
-    def read(self, data):
+    def _read(self, data):
         return self.adaptor.read(data)
 
 
-    def write(self, buffer_size):
+    def _write(self, buffer_size):
         return self.adaptor.write(buffer_size)
 
 
@@ -48,7 +48,7 @@ class StreamProtocol(object):
 
 
     def _work(self):
-        while self._call_active and not self.adaptor._is_waiting():
+        while self._call_active and not self.adaptor.is_waiting():
             self._advance()
 
 

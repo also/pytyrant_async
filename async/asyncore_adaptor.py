@@ -3,6 +3,7 @@ import socket
 
 import async
 
+
 class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
     def __init__(self, protocol, host, port):
         asyncore.dispatcher.__init__(self)
@@ -35,7 +36,7 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
         self._write_buffer = data
 
 
-    def _is_waiting(self):
+    def is_waiting(self):
         return self._reading or self._writing
 
 
@@ -52,7 +53,7 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
         else:
             return False
 
-    
+
     def handle_read(self):
         self._handle_read(self.recv(self._read_length - len(self._read_buffer)))
 

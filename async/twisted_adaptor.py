@@ -11,14 +11,14 @@ class TwistedAdaptor():
         self._read_length = None
 
 
-    def _is_waiting(self):
+    def is_waiting(self):
         return (self._write_buffer is not None or self._read_length is not None) or (self._twisted and self._twisted._reading)
 
 
     def read(self, length):
         if self._read_length is not None:
             raise Exception('read called again before callback')
-        
+
         if self._twisted is None:
             self._read_length = length
         else:

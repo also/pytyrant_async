@@ -181,10 +181,11 @@ class Tyrant(async.StreamProtocol):
 
     def handle_close(self):
         self.close()
-    
-    
-    def write(self, lst):
-        super(Tyrant, self).write(''.join(lst))
+
+
+    def _write(self, lst):
+        super(Tyrant, self)._write(''.join(lst))
+
 
     def _str(self):
         '''
@@ -193,16 +194,17 @@ class Tyrant(async.StreamProtocol):
         self._do_now(
             self._len,  # length -> _result
             self._use_result,
-            self.read,
+            self._read,
             self._use_read_buffer_as_result
         )
+
 
     def _len(self):
         '''
         Reads a length from the server and stores it in the result.
         '''
         self._do_now(
-            (self.read, 4),
+            (self._read, 4),
             self._process_read_buffer(lambda result: struct.unpack('>I', result)[0])
         )
 
@@ -219,14 +221,14 @@ class Tyrant(async.StreamProtocol):
             else:
                 self._set_result(True)
         self._do_now(
-            (self.read, 1),
+            (self._read, 1),
             _check_result
         )
 
 
     def get(self, key, callback):
         self._do([
-            (self.write, _t1(C.get, key)),
+            (self._write, _t1(C.get, key)),
             self._success,
             self._str
         ], callback)
@@ -234,21 +236,21 @@ class Tyrant(async.StreamProtocol):
 
     def put(self, key, value, callback):
         self._do([
-            (self.write, _t2(C.put, key, value)),
+            (self._write, _t2(C.put, key, value)),
             self._success
         ], callback)
 
 
     def out(self, key, callback):
         self._do([
-            (self.write, _t1(C.out, key)),
+            (self._write, _t1(C.out, key)),
             self._success
         ], callback)
 
 
     def stat(self, callback):
         self._do([
-            (self.write, _t0(C.stat)),
+            (self._write, _t0(C.stat)),
             self._success,
             self._str
         ], callback)
