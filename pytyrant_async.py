@@ -126,10 +126,6 @@ def _tDouble(code, key, integ, fract):
     ]
 
 
-# def socklong(sock):
-#     return struct.unpack('>Q', sockrecv(sock, 8))[0]
-#
-#
 # def sockdouble(sock):
 #     intpart, fracpart = struct.unpack('>QQ', sockrecv(sock, 16))
 #     return intpart + (fracpart * 1e-12)
@@ -184,6 +180,16 @@ class Tyrant(async.StreamProtocol):
         )
 
 
+    def _long(self):
+        '''
+        Reads a long from the server and stores it in the result.
+        '''
+        self._do_now(
+            (self._read, 8),
+            self._process_read_buffer(lambda result: struct.unpack('>Q', result)[0])
+        )
+
+
     def _success(self):
         '''
         Reads the response from the server.
@@ -220,6 +226,22 @@ class Tyrant(async.StreamProtocol):
         self._do([
             (self._write, _t1(C.out, key)),
             self._success
+        ], callback)
+
+
+    def rnum(self, callback):
+        self._do([
+            (self._write, _t0(C.size)),
+            self._success,
+            self._long,
+        ], callback)
+
+
+    def size(self, callback):
+        self._do([
+            (self._write, _t0(C.rnum)),
+            self._success,
+            self._long,
         ], callback)
 
 

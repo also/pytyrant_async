@@ -104,6 +104,7 @@ class StreamProtocol(object):
     def _process_read_buffer(self, callback):
         return lambda: self._set_result(callback(self._read_buffer))
 
+
 class ReadBufferingAdaptor(object):
     def _init_read_buffering(self):
         self._reading = False
