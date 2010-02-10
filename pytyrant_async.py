@@ -126,40 +126,15 @@ def _tDouble(code, key, integ, fract):
     ]
 
 
-# def socksend(sock, lst):
-#     sock.sendall(''.join(lst))
-# 
-# 
-# def sockrecv(sock, bytes):
-#     d = ''
-#     while len(d) < bytes:
-#         d += sock.recv(min(8192, bytes - len(d)))
-#     return d
-# 
-# 
-# def socksuccess(sock):
-#     fail_code = ord(sockrecv(sock, 1))
-#     if fail_code:
-#         raise TyrantError(fail_code)
-# 
-# 
-# def socklen(sock):
-#     return struct.unpack('>I', sockrecv(sock, 4))[0]
-# 
-# 
 # def socklong(sock):
 #     return struct.unpack('>Q', sockrecv(sock, 8))[0]
-# 
-# 
-# def sockstr(sock):
-#     return sockrecv(sock, socklen(sock))
-# 
-# 
+#
+#
 # def sockdouble(sock):
 #     intpart, fracpart = struct.unpack('>QQ', sockrecv(sock, 16))
 #     return intpart + (fracpart * 1e-12)
-# 
-# 
+#
+#
 # def sockstrpair(sock):
 #     klen = socklen(sock)
 #     vlen = socklen(sock)

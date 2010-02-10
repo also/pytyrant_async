@@ -2,6 +2,7 @@ from twisted.internet import protocol
 
 import async
 
+
 class TwistedAdaptor():
     def __init__(self, protocol, host, port):
         reactor.connectTCP(host, port, TwistedFactory(protocol, self))
