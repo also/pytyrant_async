@@ -234,12 +234,13 @@ class GeneratorCallback(object):
             self._adaptor.add_callback(self._next)
         except StopIteration, e:
             try:
-                if len(e.args) == 0:
-                    self._callback(None)
-                elif len(e.args) == 1:
-                    self._callback(e.args[0])
-                else:
-                    self._callback(e.args)
+                if self._callback is not None:
+                    if len(e.args) == 0:
+                        self._callback()
+                    elif len(e.args) == 1:
+                        self._callback(e.args[0])
+                    else:
+                        self._callback(e.args)
             finally:
                 self._next_callback()
         except Exception, e:

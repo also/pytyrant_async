@@ -287,12 +287,32 @@ class YTyrant(async.YStreamProtocol):
         async.y_return(result)
 
 
+    @async.y_helper
+    def _strpair(self):
+        klen = yield self._len()
+        vlen = yield self._len()
+        k = yield self._read(klen)
+        v = yield self._read(vlen)
+        async.y_return(k, v)
+
+
     @async.y
     def get(self, key):
         yield self._write(_t1(C.get, key))
         yield self._success()
         result = yield self._str()
         async.y_return(result)
+
+
+    @async.y
+    def mget(self, klst, record_callback):
+        yield self._write(_tN(C.mget, klst))
+        yield self._success()
+        numrecs = yield self._len()
+        for i in xrange(numrecs):
+            k, v = yield self._strpair()
+            record_callback(k, v)
+        async.y_return()
 
 
     @async.y
@@ -303,10 +323,33 @@ class YTyrant(async.YStreamProtocol):
 
 
     @async.y
+    def out(self, key):
+        yield self._write(_t1(C.out, key))
+        result = yield self._success()
+        async.y_return(result)
+
+
+    @async.y
     def rnum(self):
         yield self._write(_t0(C.rnum))
         yield self._success()
         result = yield self._long()
+        async.y_return(result)
+
+
+    @async.y
+    def size(self):
+        yield self._write(_t0(C.size))
+        yield self._success()
+        result = yield self._long()
+        async.y_return(result)
+
+
+    @async.y
+    def stat(self):
+        yield self._write(_t0(C.stat))
+        yield self._success()
+        result = yield self._str()
         async.y_return(result)
 
 
