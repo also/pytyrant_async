@@ -231,7 +231,7 @@ class Tyrant(async.StreamProtocol):
 
     def rnum(self, callback):
         self._do([
-            (self._write, _t0(C.size)),
+            (self._write, _t0(C.rnum)),
             self._success,
             self._long,
         ], callback)
@@ -239,7 +239,7 @@ class Tyrant(async.StreamProtocol):
 
     def size(self, callback):
         self._do([
-            (self._write, _t0(C.rnum)),
+            (self._write, _t0(C.size)),
             self._success,
             self._long,
         ], callback)
@@ -251,6 +251,63 @@ class Tyrant(async.StreamProtocol):
             self._success,
             self._str
         ], callback)
+
+
+class YTyrant(async.YStreamProtocol):
+    def _write(self, lst):
+        return super(YTyrant, self)._write(''.join(lst))
+
+
+    @async.y_helper
+    def _len(self):
+        result = yield self._read(4)
+        async.y_return(struct.unpack('>I', result)[0])
+
+
+    @async.y_helper
+    def _success(self):
+        result = yield self._read(1)
+        if ord(result):
+            raise TyrantError
+
+
+    @async.y_helper
+    def _long(self):
+        '''
+        Reads a long from the server.
+        '''
+        result = yield self._read(8)
+        async.y_return(struct.unpack('>Q', result)[0])
+
+
+    @async.y_helper
+    def _str(self):
+        str_len = yield self._len()
+        result = yield self._read(str_len)
+        async.y_return(result)
+
+
+    @async.y
+    def get(self, key):
+        yield self._write(_t1(C.get, key))
+        yield self._success()
+        result = yield self._str()
+        async.y_return(result)
+
+
+    @async.y
+    def put(self, key, value):
+        yield self._write(_t2(C.put, key, value))
+        result = yield self._success()
+        async.y_return(result)
+
+
+    @async.y
+    def rnum(self):
+        yield self._write(_t0(C.rnum))
+        yield self._success()
+        result = yield self._long()
+        async.y_return(result)
 
 
 def callback(*args):

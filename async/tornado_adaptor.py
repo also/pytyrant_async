@@ -11,6 +11,8 @@ class TornadoAdaptor(object):
         s.connect((host, port))
         self.stream = iostream.IOStream(s)
 
+        self.add_callback = self.stream.io_loop.add_callback
+
 
     def is_waiting(self):
         return self.stream.reading() or self.stream.writing()

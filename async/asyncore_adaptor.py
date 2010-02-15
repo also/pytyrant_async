@@ -46,3 +46,8 @@ class AsyncoreAdaptor(async.ReadBufferingAdaptor, asyncore.dispatcher):
             # finished writing
             self._writing = False
             self.protocol._write_callback()
+
+
+    def add_callback(self, callback):
+        # FIXME
+        callback()
