@@ -1,7 +1,7 @@
     import pytyrant_async
-    from async import to
+    from async import tornado_adaptor
     pyty = pytyrant_async.Tyrant()
-    net = to.TornadoAdaptor(pyty, host, port)
+    net = tornado_adaptor.TornadoAdaptor(pyty, host, port)
     
     # elsewhere
     from tornado import ioloop
