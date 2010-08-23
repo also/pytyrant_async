@@ -160,6 +160,7 @@ def y(coroutine, queue=True):
             try:
                 next_coroutine = protocol._y_queue.pop()
             except IndexError:
+                protocol._y_active = False
                 return None
             next_coroutine()
 
